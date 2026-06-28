@@ -1,0 +1,3 @@
+func azure functionapp publish <FUNCTION_APP_NAME> 
+
+func azure functionapp publish <FUNCTION_APP_NAME> --publish-settings-only
