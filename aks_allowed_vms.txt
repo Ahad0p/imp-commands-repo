@@ -1,0 +1,4 @@
+Standard_B2s_v2   ⭐ Recommended
+Standard_B2as_v2
+Standard_B2ps_v2
+Standard_B2ls_v2
