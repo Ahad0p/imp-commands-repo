@@ -1,0 +1,84 @@
+# Node.js Function App to Linux on Azure
+# Build a Node.js function app and deploy it to Azure as a Linux function app.
+# Add steps that analyze code, save build artifacts, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
+
+trigger:
+- iac-implementation
+
+variables:
+
+  # Azure Resource Manager connection created during pipeline creation
+  azureSubscription: ''
+
+  # Function app name
+  functionAppName: ''
+
+  # Environment name
+  environmentName: ''
+
+  # Agent VM image name
+  vmImageName: 'ubuntu-latest'
+
+stages:
+- stage: Build
+  displayName: Build stage
+  jobs:
+  - job: Build
+    displayName: Build
+    pool:
+      vmImage: $(vmImageName)
+
+    steps:
+    - task: NodeTool@0
+      inputs:
+        versionSpec: '20.x'
+      displayName: 'Install Node.js'
+
+    - script: |
+        cd qrCodeGenerator
+        npm install
+        npm run build --if-present
+        npm run test --if-present
+      displayName: 'Prepare binaries'
+    
+    - task: CopyFiles@2
+      inputs:
+        SourceFolder: '$(System.DefaultWorkingDirectory)/qrCodeGenerator/GenerateQRCode/'
+        Contents: '**'
+        TargetFolder: '$(System.DefaultWorkingDirectory)/qrCodeGenerator/'
+
+    - task: ArchiveFiles@2
+      displayName: 'Archive files'
+      inputs:
+        rootFolderOrFile: '$(System.DefaultWorkingDirectory)/qrCodeGenerator/'
+        includeRootFolder: false
+        archiveType: zip
+        archiveFile: $(Build.ArtifactStagingDirectory)/qrCodeGenerator/$(Build.BuildId).zip
+        replaceExistingArchive: true
+
+    - upload: $(Build.ArtifactStagingDirectory)/qrCodeGenerator/$(Build.BuildId).zip
+      artifact: drop
+
+- stage: Deploy
+  displayName: Deploy stage
+  dependsOn: Build
+  condition: succeeded()
+  jobs:
+  - deployment: Deploy
+    displayName: Deploy
+    environment: $(environmentName)
+    pool:
+      vmImage: $(vmImageName)
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: AzureFunctionApp@2
+            inputs:
+              connectedServiceNameARM: ''
+              appType: 'functionAppLinux'
+              appName: '$(functionAppName)'
+              package: '$(Pipeline.Workspace)/drop/$(Build.BuildID).zip'
+              runtimeStack: 'NODE|20'
+              deploymentMethod: 'zipDeploy'
